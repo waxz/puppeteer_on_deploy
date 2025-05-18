@@ -2,10 +2,15 @@ import { Application, h, puppeteer, renderToString, Router } from "./deps.ts";
 import Layout from "./components/Layout.tsx";
 
 const BROWSERLESS_TOKEN = Deno.env.get("BROWSERLESS_TOKEN");
+
+const BROSER_LESS_SERVER = Deno.env.get("BROSER_LESS_SERVER");
+
 if (BROWSERLESS_TOKEN === undefined) {
   throw new TypeError("Missing BROWSERLESS_TOKEN environment variable.");
 }
-
+if (BROSER_LESS_SERVER === undefined) {
+  throw new TypeError("Missing BROSER_LESS_SERVER environment variable.");
+}
 const router = new Router();
 
 router.get("/", (ctx) => {
@@ -68,12 +73,34 @@ router.get("/screenshot.png", async (ctx) => {
     return;
   }
 
+  const launchArgs = JSON.stringify({
+    args: [`--window-size=1920,1080`],
+    headless: false,
+    stealth: true,
+    timeout: 30000
+  });
+  
+
+
+
   const browser = await puppeteer.connect({
-    browserWSEndpoint: `wss://chrome.browserless.io?token=${BROWSERLESS_TOKEN}`,
+    browserWSEndpoint: `wss://${BROSER_LESS_SERVER}?token=${BROWSERLESS_TOKEN}&proxy=residential&launch=${launchArgs}`,
   });
   try {
     const page = await browser.newPage();
-    await page.goto(url.href, { waitUntil: "domcontentloaded" });
+
+    page.setViewport({ width: 1920, height: 1080 }) //it's best to use this in addition to --window-size
+    await page.setUserAgent('My Custom User Agent/1.0');
+    console.log(`User agent: ${await page.evaluate(() => navigator.userAgent)}`);
+    console.log(`Viewport size: ${JSON.stringify(await page.viewport())}`);
+    console.log("Navigating to example.com...");
+
+
+    await page.goto(url.href, { waitUntil: "networkidle0" });
+    const html = await page.content();
+    console.log(html)
+
+
     const res = await page.screenshot() as Uint8Array;
     ctx.response.body = res;
     ctx.response.type = "png";
